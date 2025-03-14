@@ -1,0 +1,2 @@
+# Status-Optics runner
+This is the runner for the Status-Optics project. The runner is responsible for pulling the test code from git, running the tests, and reporting the results back to the defined endpoint(s).
