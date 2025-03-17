@@ -18,3 +18,9 @@ jobs:
         uses: docker://golang:1.24
         run: |
           go build -v ./...
+      - name: Setup GH registry
+        uses: https://github.com/cloudbees-io/configure-oci-credentials@v1
+        with:
+          registry: ghcr.io
+          username: GH_USERNAME
+          password: GH_TOKEN_PACKAGE_ADMIN
