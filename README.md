@@ -1,51 +1,77 @@
 # Status-Optics runner
 This is the runner for the Status-Optics project. The runner is responsible for pulling the test code from git, running the tests, and reporting the results back to the defined endpoint(s).
 
+## Environment Variables needed to bootstrap the runner
+RUNNER_CONFIG_REPO - The URL of the git repository containing the runner configuration.
+RUNNER_CONFIG_BRANCH - The branch of the git repository containing the runner configuration.
+RUNNER_CONFIG_PATH - The path to the runner configuration file in the git repository.
+
+
 ## Runner Configuration
 ```yaml
 # Runner Configuration (runner.yaml)
 
 runner:
-  name: "my-app-monitor-runner" # Optional: A descriptive name for the runner
-  version: "1.0.0" # Optional: Runner version
+  name: "my-app-monitor-runner"
+  version: "1.0.0"
 
-git:
-  repository: "https://github.com/your-org/your-test-repo.git" # Required: Git repository URL
-  branch: "main" # Optional: Git branch (default: main)
-  pull_interval: "60s" # Required for cron-based polling (e.g., "1m", "30s", "1h")
-  webhook_enabled: false # Optional: Enable webhook support (default: false)
-  webhook_secret: "your-secret-webhook-token" # Required if webhook_enabled: true
-
-test:
-  language: "python" # Required: Language of the test scripts (e.g., "python", "javascript", "bash")
-  command: "pytest tests/" # Required: Command to execute the tests (e.g., "pytest", "npm test", "sh run_tests.sh")
-  working_directory: "/app/tests" # Optional: Working directory for test execution
+tests:
+  - name: "api-health-check"
+    language: "python"
+    command: "pytest tests/api_health_test.py"
+    working_directory: "/app/tests"
+    source:
+      repository: "https://github.com/your-org/your-test-repo.git"
+      branch: "main"
+      pull_interval: "60s"
+      webhook_enabled: false
+      webhook_secret: $["git-token-env-var-name"]
+  - name: "performance-test"
+    language: "javascript"
+    command: "npm run performance"
+    working_directory: "/app/performance"
+    source:
+      repository: "https://github.com/your-org/your-test-repo.git"
+      branch: "main"
+      pull_interval: "60s"
+      webhook_enabled: false
+      webhook_secret: $["git-token-env-var-name"]
+  - name: "database-test"
+    language: "bash"
+    command: "sh run_db_tests.sh"
+    working_directory: "/app/db"
+    source:
+      repository: "https://github.com/your-org/your-test-repo.git"
+      branch: "main"
+      pull_interval: "60s"
+      webhook_enabled: false
+      webhook_secret: $["git-token-env-var-name"]
 
 reporting:
-  endpoints: # Required: List of reporting endpoints
+  endpoints:
     - type: "datadog"
-      api_key: "your-datadog-api-key"
-      app_key: "your-datadog-app-key"
+      api_key: $["your-datadog-api-key"]
+      app_key: $["your-datadog-app-key"]
       metric_prefix: "app.monitor."
     - type: "s3"
       bucket: "your-s3-bucket"
       region: "us-east-1"
-      access_key_id: "your-access-key-id"
-      secret_access_key: "your-secret-access-key"
+      access_key_id: $["your-access-key-id"]
+      secret_access_key: $["your-secret-access-key"]
       path: "results/"
-    - type: "saas" # if using the SaaS service.
-      api_url: "https://your-saas-service.com/api/results"
-      api_token: "your-saas-api-token"
-  format: "json" # Optional: Format of the test results (e.g., "json", "xml", "text")
+    - type: "director"
+      api_url: "https://your-director-service.com/api/results"
+      api_token: "your-director-api-token"
+  format: "json"
 
-saas: # Configuration for SaaS integration (optional)
-  enabled: false # Optional: Enable SaaS integration (default: false)
-  api_url: "https://your-saas-service.com/api/runner" # Required if saas.enabled: true
-  runner_id: "unique-runner-id" # Required if saas.enabled: true
-  api_token: "your-saas-api-token" # Required if saas.enabled: true
+director:
+  enabled: false
+  api_url: "https://your-director-service.com/api/runner"
+  runner_id: $["unique-runner-id"]
+  api_token: $["your-director-api-token"]
 
 logging:
-  level: "INFO" # Optional: Logging level (e.g., "DEBUG", "INFO", "WARNING", "ERROR")
-  format: "text" # Optional: Logging format (e.g., "json", "text")
+  level: "INFO"
+  format: "text"
 ```
 
