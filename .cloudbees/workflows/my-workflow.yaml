@@ -22,5 +22,5 @@ jobs:
         uses: https://github.com/cloudbees-io/configure-oci-credentials@v1
         with:
           registry: ghcr.io
-          username: GH_USERNAME
-          password: GH_TOKEN_PACKAGE_ADMIN
+          username: ${{ vars.GH_USERNAME }}
+          password: ${{ secrets.GH_TOKEN_PACKAGE_ADMIN }}
