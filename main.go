@@ -32,6 +32,7 @@ type TestConfig struct {
 	Language   string `yaml:"language"`
 	WorkingDir string `yaml:"working_dir"`
 	SetupCmd   string `yaml:"setup_cmd"`
+	Executable string `yaml:"executable"`
 	Command    string `yaml:"command"`
 	Frequency  int32  `yaml:"frequency"`
 }
@@ -80,12 +81,26 @@ func main() {
 					return
 				}
 				fmt.Printf("Virtual environment created and dependencies installed for test: %s\n", testConfig.Name)
+
+				// Activate the virtual environment
+				// cmd = exec.Command("source", "/tmp/"+testConfig.Name+"/"+testConfig.WorkingDir+"/venv/bin/activate")
+				// err = cmd.Run()
+				// if err != nil {
+				// 	fmt.Printf("Error activating virtual environment: %s\n", err)
+				// 	return
+				// }
+				// fmt.Printf("Virtual environment activated for test: %s\n", testConfig.Name)
+
+				// Update the command to run the test using the virtual environment
+				testConfig.Executable = "/tmp/" + testConfig.Name + "/" + testConfig.WorkingDir + "/venv/bin/" + testConfig.Executable
+
 			}
 
 			// Execute the test command
-			fmt.Printf("Executing test: %s\n", testConfig.Name)
-			// Here you would execute the test command, e.g., using os/exec
-			runString := fmt.Sprintf("cd /tmp/%s/%s && %s", testConfig.Name, testConfig.WorkingDir, testConfig.Command)
+			// fmt.Printf("Executing test: %s\n", testConfig.Name)
+			// // Here you would execute the test command, e.g., using os/exec
+			// runString := fmt.Sprintf("cd /tmp/%s/%s && %s", testConfig.Name, testConfig.WorkingDir, testConfig.Command)
+			runString := fmt.Sprintf("cd /tmp/%s/%s && %s", testConfig.Name, testConfig.WorkingDir, testConfig.Executable+" "+testConfig.Command)
 			cmd := exec.Command("bash", "-c", runString)
 
 			// Print the output of the command
