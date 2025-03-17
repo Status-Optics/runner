@@ -9,8 +9,12 @@ on:
 jobs:
   build:
     steps:
-      - name: Say hello
-        uses: docker://golang:1.20.3-alpine3.17
-        shell: sh
+      - uses: docker://alpine:latest
         run: |
-          echo "hello world"
+          git config --global --add safe.directory /cloudbees/workspace"
+      - name: checkout
+        uses: https://github.com/cloudbees-io/checkout@v1
+      - name: Build app
+        uses: docker://golang:1.24
+        run: |
+          go build -v ./...
