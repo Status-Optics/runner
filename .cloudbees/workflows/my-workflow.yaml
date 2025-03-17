@@ -24,3 +24,7 @@ jobs:
           registry: ghcr.io
           username: ${{ vars.GH_USERNAME }}
           password: ${{ secrets.GH_TOKEN_PACKAGE_ADMIN }}
+      - name: Publish container
+        uses: https://github.com/cloudbees-io/kaniko@v1
+        with:
+          destination: Status-Optics/runner:0.0.1
