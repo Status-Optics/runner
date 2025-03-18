@@ -3,7 +3,7 @@ RUN apk update && apk add --no-cache git python3 py3-pip
 
 WORKDIR /app
 COPY . .
-# RUN chmod +x generate-sha.sh && ./generate-sha.sh
+RUN chmod +x generate-sha.sh && ./generate-sha.sh
 RUN go mod download
 RUN go build -o main .
 
