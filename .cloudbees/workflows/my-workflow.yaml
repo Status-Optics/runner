@@ -27,4 +27,4 @@ jobs:
       - name: Publish container
         uses: https://github.com/cloudbees-io/kaniko@v1
         with:
-          destination: ghcr.io/Status-Optics/runner:0.0.1
+          destination: ghcr.io/status-optics/runner:0.0.1
