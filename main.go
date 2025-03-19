@@ -79,10 +79,11 @@ func main() {
 			}
 
 			// Execute the test command
-			// fmt.Printf("Executing test: %s\n", testConfig.Name)
-			// // Here you would execute the test command, e.g., using os/exec
-			// runString := fmt.Sprintf("cd /tmp/%s/%s && %s", testConfig.Name, testConfig.WorkingDir, testConfig.Command)
-			runString := fmt.Sprintf("cd /tmp/%s/%s && %s", testConfig.Name, testConfig.Source.Directory, testConfig.Executable+" "+testConfig.Command)
+			dirPath := "/tmp/" + testConfig.Name
+			if testConfig.Source.Directory != "" {
+				dirPath += "/" + testConfig.Source.Directory
+			}
+			runString := fmt.Sprintf("cd %s && %s", dirPath, testConfig.Executable+" "+testConfig.Command)
 			fmt.Println(runString)
 			cmd := exec.Command("bash", "-c", runString)
 
@@ -98,12 +99,6 @@ func main() {
 		})
 		fmt.Printf("Scheduled test: %s every %d seconds\n", testConfig.Name, testConfig.Frequency)
 	}
-
-	// s.Every(duration).Do(func() {
-	// 	// Implement logic to pull updates and update config
-	// 	fmt.Println("Checking for config updates...")
-	// 	// ...
-	// })
 
 	s.StartBlocking()
 }
