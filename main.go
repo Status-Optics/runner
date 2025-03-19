@@ -26,11 +26,11 @@ type TestConfig struct {
 	Source struct {
 		Repository string `yaml:"repository"`
 		Branch     string `yaml:"branch"`
+		Directory  string `yaml:"directory"`
 		GetUser    string `yaml:"get_user"`  // This will be an environment variable that should be substituted
 		GetToken   string `yaml:"get_token"` // This will be an environment variable that should be substituted
 	} `yaml:"source"`
 	Language   string `yaml:"language"`
-	WorkingDir string `yaml:"working_dir"`
 	SetupCmd   string `yaml:"setup_cmd"`
 	Executable string `yaml:"executable"`
 	Command    string `yaml:"command"`
@@ -66,15 +66,9 @@ func main() {
 
 			// If Language is python, create a virtual environment and install dependencies
 			if testConfig.Language == "python" {
-				// Create a virtual environment
-				cmd := exec.Command("python3", "-m", "venv", "/tmp/"+testConfig.Name+"/"+testConfig.WorkingDir+"/venv")
-				err := cmd.Run()
-				if err != nil {
-					fmt.Printf("Error creating virtual environment: %s\n", err)
-					return
-				}
+
 				// Install dependencies
-				cmd = exec.Command("/tmp/"+testConfig.Name+"/"+testConfig.WorkingDir+"/venv/bin/pip", "install", "-r", "/tmp/"+testConfig.Name+"/"+testConfig.WorkingDir+"/requirements.txt")
+				cmd := exec.Command("pip3", "install", "-r", "/tmp/"+testConfig.Name+"/"+testConfig.Source.Directory+"/requirements.txt")
 				err = cmd.Run()
 				if err != nil {
 					fmt.Printf("Error installing dependencies: %s\n", err)
@@ -82,25 +76,14 @@ func main() {
 				}
 				fmt.Printf("Virtual environment created and dependencies installed for test: %s\n", testConfig.Name)
 
-				// Activate the virtual environment
-				// cmd = exec.Command("source", "/tmp/"+testConfig.Name+"/"+testConfig.WorkingDir+"/venv/bin/activate")
-				// err = cmd.Run()
-				// if err != nil {
-				// 	fmt.Printf("Error activating virtual environment: %s\n", err)
-				// 	return
-				// }
-				// fmt.Printf("Virtual environment activated for test: %s\n", testConfig.Name)
-
-				// Update the command to run the test using the virtual environment
-				testConfig.Executable = "/tmp/" + testConfig.Name + "/" + testConfig.WorkingDir + "/venv/bin/" + testConfig.Executable
-
 			}
 
 			// Execute the test command
 			// fmt.Printf("Executing test: %s\n", testConfig.Name)
 			// // Here you would execute the test command, e.g., using os/exec
 			// runString := fmt.Sprintf("cd /tmp/%s/%s && %s", testConfig.Name, testConfig.WorkingDir, testConfig.Command)
-			runString := fmt.Sprintf("cd /tmp/%s/%s && %s", testConfig.Name, testConfig.WorkingDir, testConfig.Executable+" "+testConfig.Command)
+			runString := fmt.Sprintf("cd /tmp/%s/%s && %s", testConfig.Name, testConfig.Source.Directory, testConfig.Executable+" "+testConfig.Command)
+			fmt.Println(runString)
 			cmd := exec.Command("bash", "-c", runString)
 
 			// Print the output of the command
