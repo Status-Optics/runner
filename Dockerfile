@@ -1,5 +1,5 @@
 FROM golang:1.24
-RUN apt-get update && apt-get install -y git python3
+RUN apt-get update && apt-get install -y git python3 python3-pip python3-venv
 
 WORKDIR /app
 COPY . .

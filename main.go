@@ -125,9 +125,31 @@ func main() {
 			}
 
 			// If Language is python, create a virtual environment and install dependencies
+			vPythonPath := "python3"
 			if testConfig.Language == "python" {
+				// Create a virtual environment
+				cmd := exec.Command("python3", "-m", "venv", "/tmp/"+testConfig.Name+"/venv")
+				err = cmd.Run()
+				if err != nil {
+					logger.Error("Error creating virtual environment", zap.Error(err))
+					return
+				}
+				logger.Info("Virtual environment created", zap.String("test", testConfig.Name))
+				// Activate the virtual environment
+				// Note: In a real-world scenario, you would need to activate the virtual environment in the same shell
+				// This is a workaround to run the command in the virtual environment
+				// cmd = exec.Command("/bin/bash", "-c", fmt.Sprintf("source /tmp/%s/venv/bin/activate", testConfig.Name))
+				// err = cmd.Run()
+				// if err != nil {
+				// 	logger.Error("Error activating virtual environment", zap.Error(err))
+				// 	return
+				// }
+				// logger.Info("Virtual environment activated", zap.String("test", testConfig.Name))
+				vPythonPath = "/tmp/" + testConfig.Name + "/venv/bin/python3"
+				vPipPath := "/tmp/" + testConfig.Name + "/venv/bin/pip3"
+
 				// Install dependencies
-				cmd := exec.Command("pip3", "install", "-r", "/tmp/"+testConfig.Name+"/"+testConfig.Source.Directory+"/requirements.txt")
+				cmd = exec.Command(vPipPath, "install", "-r", "/tmp/"+testConfig.Name+"/"+testConfig.Source.Directory+"/requirements.txt")
 				err = cmd.Run()
 				if err != nil {
 					logger.Error("Error installing dependencies", zap.Error(err))
@@ -142,7 +164,7 @@ func main() {
 			if testConfig.Source.Directory != "" {
 				dirPath += "/" + testConfig.Source.Directory
 			}
-			runString := fmt.Sprintf("cd %s && %s", dirPath, testConfig.Executable+" "+testConfig.Command)
+			runString := fmt.Sprintf("cd %s && %s", dirPath, vPythonPath+" "+testConfig.Command)
 			fmt.Println(runString)
 			cmd := exec.Command("bash", "-c", runString)
 
