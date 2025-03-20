@@ -6,7 +6,14 @@ import (
 	"os/exec"
 	"time"
 
+	// "context"
+	// "encoding/json"
+	// "github.com/DataDog/datadog-api-client-go/v2/api/datadog"
+	// "github.com/DataDog/datadog-api-client-go/v2/api/datadogV2"
+
 	"github.com/aranw/yamlcfg"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/go-co-op/gocron"
 	"github.com/go-git/go-git/v5"
@@ -15,10 +22,17 @@ import (
 
 type Config struct {
 	Runner struct {
-		Name    string `yaml:"name"`
-		Version string `yaml:"version"`
+		Name     string `yaml:"name"`
+		Version  string `yaml:"version"`
+		LogLevel string `yaml:"log_level"`
 	} `yaml:"runner"`
-	Tests []TestConfig `yaml:"tests"`
+	Tests     []TestConfig `yaml:"tests"`
+	Reporting struct {
+		Endpoints []struct {
+			Type   string `yaml:"type"`
+			Format string `yaml:"format,omitempty"`
+		} `yaml:"endpoints"`
+	} `yaml:"reporting"`
 }
 
 type TestConfig struct {
@@ -37,6 +51,49 @@ type TestConfig struct {
 	Frequency  int32  `yaml:"frequency"`
 }
 
+func createLogger(logLevel string) *zap.Logger {
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "timestamp"
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	newLogLevel := zap.InfoLevel
+	switch logLevel {
+	case "debug":
+		newLogLevel = zap.DebugLevel
+	case "info":
+		newLogLevel = zap.InfoLevel
+	case "warn":
+		newLogLevel = zap.WarnLevel
+	case "error":
+		newLogLevel = zap.ErrorLevel
+	case "fatal":
+		newLogLevel = zap.FatalLevel
+	case "panic":
+		newLogLevel = zap.PanicLevel
+	}
+
+	config := zap.Config{
+		Level:             zap.NewAtomicLevelAt(newLogLevel),
+		Development:       false,
+		DisableCaller:     false,
+		DisableStacktrace: false,
+		Sampling:          nil,
+		Encoding:          "json",
+		EncoderConfig:     encoderCfg,
+		OutputPaths: []string{
+			"stderr",
+		},
+		ErrorOutputPaths: []string{
+			"stderr",
+		},
+		InitialFields: map[string]interface{}{
+			"pid": os.Getpid(),
+		},
+	}
+
+	return zap.Must(config.Build())
+}
+
 func main() {
 	// Bootstrap the application
 	config, err := bootstrap()
@@ -45,11 +102,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Set up logger
+	logger := createLogger(config.Runner.LogLevel)
+	defer logger.Sync()
+	logger.Info("Starting Runner")
+
 	// define a var to hold the tests
 	testConfigs := []TestConfig{}
-	for _, test := range config.Tests {
-		testConfigs = append(testConfigs, test)
-	}
+	testConfigs = append(testConfigs, config.Tests...)
 
 	// Schedule configuration updates
 	s := gocron.NewScheduler(time.UTC)
@@ -58,23 +118,22 @@ func main() {
 	for _, testConfig := range testConfigs {
 		s.Every(time.Duration(testConfig.Frequency) * time.Second).Do(func() {
 			// Pull the latest code from the repository
-			err := cloneOrUpdateRepo(testConfig.Source.Repository, testConfig.Source.GetUser, testConfig.Source.GetToken, testConfig.Name)
+			repo, err := cloneOrUpdateRepo(testConfig.Source.Repository, testConfig.Source.GetUser, testConfig.Source.GetToken, testConfig.Name)
 			if err != nil {
-				fmt.Println("Error cloning/updating test repository:", err)
+				logger.Error("Error cloning/updating test repository", zap.String("repository", testConfig.Source.Repository), zap.Error(err))
 				return
 			}
 
 			// If Language is python, create a virtual environment and install dependencies
 			if testConfig.Language == "python" {
-
 				// Install dependencies
 				cmd := exec.Command("pip3", "install", "-r", "/tmp/"+testConfig.Name+"/"+testConfig.Source.Directory+"/requirements.txt")
 				err = cmd.Run()
 				if err != nil {
-					fmt.Printf("Error installing dependencies: %s\n", err)
+					logger.Error("Error installing dependencies", zap.Error(err))
 					return
 				}
-				fmt.Printf("Virtual environment created and dependencies installed for test: %s\n", testConfig.Name)
+				logger.Info("Dependencies installed", zap.String("test", testConfig.Name))
 
 			}
 
@@ -87,37 +146,56 @@ func main() {
 			fmt.Println(runString)
 			cmd := exec.Command("bash", "-c", runString)
 
+			// Get the commit hash from repo
+			ref, _ := repo.Head()
+			commit, err := repo.CommitObject(ref.Hash())
+			if err != nil {
+				logger.Error("Error getting commit object", zap.Error(err))
+				return
+			}
+
+			cmd.Env = append(os.Environ(), fmt.Sprintf("TEST_GIT_COMMIT=%s", commit.Hash.String()))
+
 			// Print the output of the command
 			output, err := cmd.Output()
 			if err != nil {
-				fmt.Printf("Error executing test command: %s\n", err)
+				logger.Error("Error executing test command", zap.Error(err))
 				return
 			}
-			fmt.Printf("Output of test command: %s\n", output)
-			fmt.Printf("Test %s executed successfully\n", testConfig.Name)
-
+			// Log the output
+			logger.Debug("Test executed", zap.String("test", testConfig.Name))
+			logger.Debug("Output", zap.String("output", string(output)))
+			for _, endpoint := range config.Reporting.Endpoints {
+				if endpoint.Type == "stdout" {
+					logToStdout(string(output), endpoint.Format)
+				}
+			}
+			logger.Debug("Test completed", zap.String("test", testConfig.Name))
 		})
-		fmt.Printf("Scheduled test: %s every %d seconds\n", testConfig.Name, testConfig.Frequency)
+		logger.Debug("Scheduled test", zap.String("test", testConfig.Name), zap.Int32("frequency", testConfig.Frequency))
 	}
 
 	s.StartBlocking()
 }
 
-func cloneOrUpdateRepo(repoURL string, user string, token string, dirName string) error {
+func cloneOrUpdateRepo(repoURL string, user string, token string, dirName string) (*git.Repository, error) {
+
+	repo := &git.Repository{}
+	var err error
 	// Check if the directory exists
-	if _, err := os.Stat("/tmp/" + dirName); err == nil {
+	if _, err = os.Stat("/tmp/" + dirName); err == nil {
 		// Open the existing repository
-		repo, err := git.PlainOpen("/tmp/" + dirName)
+		repo, err = git.PlainOpen("/tmp/" + dirName)
 		if err != nil {
 			fmt.Println("Error opening repository:", err)
-			return err
+			return nil, err
 		}
 
 		// Pull the latest changes
 		w, err := repo.Worktree()
 		if err != nil {
 			fmt.Println("Error getting worktree:", err)
-			return err
+			return nil, err
 		}
 		err = w.Pull(&git.PullOptions{
 			Auth: &http.BasicAuth{
@@ -128,7 +206,7 @@ func cloneOrUpdateRepo(repoURL string, user string, token string, dirName string
 		if err != nil {
 			if err.Error() != "already up-to-date" {
 				fmt.Println("Error pulling changes:", err)
-				return err
+				return nil, err
 			} else {
 				fmt.Println("Repository is already up-to-date")
 			}
@@ -137,7 +215,7 @@ func cloneOrUpdateRepo(repoURL string, user string, token string, dirName string
 		}
 	} else if os.IsNotExist(err) {
 		// If the directory does not exist, clone the repository
-		repo, err := git.PlainClone("/tmp/"+dirName, false, &git.CloneOptions{
+		repo, err = git.PlainClone("/tmp/"+dirName, false, &git.CloneOptions{
 			URL:      repoURL,
 			Progress: os.Stdout,
 			Auth: &http.BasicAuth{
@@ -147,11 +225,11 @@ func cloneOrUpdateRepo(repoURL string, user string, token string, dirName string
 		})
 		if err != nil {
 			fmt.Println("Error cloning repository:", err)
-			return err
+			return nil, err
 		}
 		fmt.Println(repo)
 	}
-	return nil
+	return repo, nil
 }
 
 func bootstrap() (Config, error) {
@@ -181,7 +259,7 @@ func bootstrap() (Config, error) {
 	}
 
 	// Clone or update the config repository
-	err := cloneOrUpdateRepo(configRepo, gitConfigUser, gitConfigToken, "runner-config")
+	_, err := cloneOrUpdateRepo(configRepo, gitConfigUser, gitConfigToken, "runner-config")
 	if err != nil {
 		fmt.Println("Error cloning/updating config repository:", err)
 		return Config{}, err
@@ -193,7 +271,7 @@ func bootstrap() (Config, error) {
 		fmt.Println("Error reading/parsing config:", err)
 		return Config{}, err
 	}
-	fmt.Println(config)
+	// fmt.Println(config)
 	return config, nil
 }
 
@@ -205,9 +283,27 @@ func readAndParseConfig(filePath string) (Config, error) {
 		return Config{}, err
 	}
 
+	logLevel := os.Getenv("RUNNER_LOG_LEVEL")
+	if logLevel != "" {
+		cfg.Runner.LogLevel = logLevel
+	}
+	// If log level is not set, default to "info"
+	if cfg.Runner.LogLevel == "" {
+		cfg.Runner.LogLevel = "info"
+	}
+
+	fmt.Println("Log level:", cfg.Runner.LogLevel)
 	// print the parsed config for debugging
-	fmt.Printf("Parsed config: %+v\n", cfg)
+	// fmt.Printf("Parsed config: %+v\n", cfg)
 
 	return *cfg, nil
 
+}
+
+func logToStdout(data string, format string) {
+	if format == "json" {
+		fmt.Println(data)
+	} else {
+		fmt.Println(data)
+	}
 }
