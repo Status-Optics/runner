@@ -4,7 +4,7 @@ This is the runner for the Status-Optics project. The runner is responsible for 
 ## Environment Variables needed to bootstrap the runner
 RUNNER_CONFIG_REPO - The URL of the git repository containing the runner configuration.
 RUNNER_CONFIG_BRANCH - The branch of the git repository containing the runner configuration.
-RUNNER_CONFIG_PATH - The path to the runner configuration file in the git repository.
+RUNNER_CONFIG_FILE - The path to the runner configuration file in the git repository.
 
 
 ## Runner Configuration
@@ -14,64 +14,29 @@ RUNNER_CONFIG_PATH - The path to the runner configuration file in the git reposi
 runner:
   name: "my-app-monitor-runner"
   version: "1.0.0"
+  log_level: "error"
 
 tests:
   - name: "api-health-check"
     language: "python"
-    command: "pytest tests/api_health_test.py"
-    working_directory: "/app/tests"
+    setup_cmd: "pip3 install -r requirements.txt"
+    executable: "python3"
+    command: "python-httpbin-get.py"
+    frequency: 60
     source:
-      repository: "https://github.com/your-org/your-test-repo.git"
+      repository: "https://github.com/Status-Optics/examples.git"
       branch: "main"
-      pull_interval: "60s"
-      webhook_enabled: false
-      webhook_secret: $["git-token-env-var-name"]
-  - name: "performance-test"
-    language: "javascript"
-    command: "npm run performance"
-    working_directory: "/app/performance"
-    source:
-      repository: "https://github.com/your-org/your-test-repo.git"
-      branch: "main"
-      pull_interval: "60s"
-      webhook_enabled: false
-      webhook_secret: $["git-token-env-var-name"]
-  - name: "database-test"
-    language: "bash"
-    command: "sh run_db_tests.sh"
-    working_directory: "/app/db"
-    source:
-      repository: "https://github.com/your-org/your-test-repo.git"
-      branch: "main"
-      pull_interval: "60s"
-      webhook_enabled: false
-      webhook_secret: $["git-token-env-var-name"]
+      directory: "python"
+      get_user: "${GIT_USER_ENV_VAR_NAME}"
+      get_token: "${GIT_TOKEN_ENV_VAR_NAME}"
 
 reporting:
   endpoints:
-    - type: "datadog"
-      api_key: $["your-datadog-api-key"]
-      app_key: $["your-datadog-app-key"]
-      metric_prefix: "app.monitor."
-    - type: "s3"
-      bucket: "your-s3-bucket"
-      region: "us-east-1"
-      access_key_id: $["your-access-key-id"]
-      secret_access_key: $["your-secret-access-key"]
-      path: "results/"
-    - type: "director"
-      api_url: "https://your-director-service.com/api/results"
-      api_token: "your-director-api-token"
-  format: "json"
+    - type: "stdout"
+      format: "json"
 
-director:
-  enabled: false
-  api_url: "https://your-director-service.com/api/runner"
-  runner_id: $["unique-runner-id"]
-  api_token: $["your-director-api-token"]
 
-logging:
-  level: "INFO"
-  format: "text"
+
+
 ```
 

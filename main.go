@@ -261,7 +261,7 @@ func bootstrap() (Config, error) {
 	if configBranch == "" {
 		configBranch = "main"
 	}
-	configPath := os.Getenv("RUNNER_CONFIG_PATH")
+	configPath := os.Getenv("RUNNER_CONFIG_FILE")
 	if configPath == "" {
 		configPath = "statusoptics.yaml"
 	}
